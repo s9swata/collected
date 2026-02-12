@@ -10,7 +10,57 @@ interface LinkMetadata {
   domain: string
 }
 
-export async function GET(request: NextRequest) {
+/**
+ * Fetch YouTube metadata using oEmbed API
+ */
+async function fetchYouTubeMetadata(url: string): Promise<LinkMetadata> {
+  try {
+    // Extract video ID for shorter URLs
+    let videoId = ''
+    if (url.includes('youtu.be/')) {
+      videoId = url.split('/').pop() || ''
+    } else if (url.includes('youtube.com/watch')) {
+      const urlParams = new URL(url).searchParams
+      videoId = urlParams.get('v') || ''
+    } else {
+      videoId = url.split('v=').pop()?.split('&')[0] || ''
+    }
+
+    if (!videoId) {
+      throw new Error('Invalid YouTube URL')
+    }
+
+    // Use YouTube oEmbed API
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+    const response = await fetch(oembedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; LinkCanvas/1.0; +https://linkcanvas.app)',
+        'Accept': 'application/json',
+      },
+      signal: new AbortController().signal, // 10s timeout
+    })
+
+    if (!response.ok) {
+      throw new Error(`YouTube oEmbed error: ${response.status}`)
+    }
+
+    const oembedData = await response.json()
+    
+    return {
+      url,
+      title: oembedData.title || 'YouTube Video',
+      description: oembedData.author_name || '',
+      imageUrl: oembedData.thumbnail_url || '',
+      favicon: 'https://www.youtube.com/favicon.ico',
+      domain: 'youtube.com',
+    }
+  } catch (error) {
+    console.error('YouTube metadata fetch error:', error)
+    throw error
+  }
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse<LinkMetadata | { error: string }>> {
   try {
     const url = request.nextUrl.searchParams.get('url')
 
@@ -34,7 +84,12 @@ export async function GET(request: NextRequest) {
 
     const domain = urlObj.hostname.replace('www.', '')
 
-    // Fetch the page with timeout
+    // Check if this is a YouTube URL
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      return NextResponse.json(await fetchYouTubeMetadata(url))
+    }
+
+    // Fetch the page with timeout for non-YouTube sites
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
 
