@@ -111,9 +111,9 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
         <GripHorizontal className="w-4 h-4 text-muted-foreground/50" />
       </div>
 
-      {/* Image Preview */}
+      {/* Image Preview - fills most of card */}
       {data.imageUrl && (
-        <div className="w-full h-32 bg-muted/20 border-b border-border overflow-hidden relative group">
+        <div className="w-full h-48 bg-muted/20 border-b border-border overflow-hidden relative group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={data.imageUrl}
@@ -126,8 +126,8 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
         </div>
       )}
 
-      {/* Content */}
-      <CardContent className="p-4 space-y-2">
+      {/* Content - reduced padding */}
+      <CardContent className="p-3 space-y-2">
         <h3 className="font-sans font-bold text-sm leading-tight line-clamp-2">
           {data.title}
         </h3>
