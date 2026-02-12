@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
 import { ExternalLink, Trash2, GripHorizontal } from 'lucide-react'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import type { Link } from '@/types'
@@ -77,6 +77,7 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
       <div className="bg-muted/30 px-3 py-1.5 border-b border-border flex items-center justify-between drag-handle cursor-grab active:cursor-grabbing">
         <div className="flex items-center gap-2">
           {data.favicon && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={data.favicon}
               alt=""
@@ -96,6 +97,7 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
       {/* Image Preview */}
       {data.imageUrl && (
         <div className="w-full h-32 bg-muted/20 border-b border-border overflow-hidden relative group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={data.imageUrl}
             alt={data.title}

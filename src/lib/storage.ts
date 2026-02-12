@@ -1,4 +1,4 @@
-import { get, set, del, clear } from 'idb-keyval'
+import { get, set, clear } from 'idb-keyval'
 import type { Canvas } from '@/types'
 
 // Storage keys

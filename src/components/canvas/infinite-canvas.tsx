@@ -8,7 +8,6 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
   Connection,
   Node,
   Edge,
@@ -16,6 +15,7 @@ import {
   Viewport,
   BackgroundVariant,
   Panel,
+  ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -23,9 +23,7 @@ import LinkNode from './link-node'
 import ConnectionEdge from './connection-edge'
 import { useCanvasStore } from '@/store/canvas-store'
 import { generateId } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Plus, Save, Download, Upload } from 'lucide-react'
-import { toast } from 'sonner'
+
 
 const nodeTypes = {
   linkCard: LinkNode,
@@ -42,7 +40,7 @@ interface InfiniteCanvasProps {
 export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
-  const [rfInstance, setRfInstance] = useState<any>(null)
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance<Node, Edge> | null>(null)
 
   const canvas = useCanvasStore(state => state.canvas)
   const updateLink = useCanvasStore(state => state.updateLink)
@@ -51,8 +49,7 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   const deleteConnection = useCanvasStore(state => state.deleteConnection)
   const setViewport = useCanvasStore(state => state.setViewport)
   const loadCanvas = useCanvasStore(state => state.loadCanvas)
-  const updateCanvas = useCanvasStore(state => state.updateCanvas)
-  const saveToStorage = useCanvasStore(state => state.saveToStorage)
+
 
   // Initialize canvas
   useEffect(() => {
@@ -119,7 +116,7 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
 
   // Viewport change handler
   const onMoveEnd = useCallback(
-    (event: any, viewport: Viewport) => {
+    (event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
       setViewport(viewport.x, viewport.y, viewport.zoom)
     },
     [setViewport]
@@ -191,7 +188,7 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
         })
       }
     },
-    []
+    [rfInstance]
   )
 
   if (!canvas) {
