@@ -1,11 +1,24 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, Suspense } from 'react'
+import dynamic from 'next/dynamic'
+
+// Dynamic import following bundle-dynamic-imports rule
+const ReactFlow = dynamic(() => import('@xyflow/react').then(mod => ({ default: mod.ReactFlow })), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-screen w-full bg-background text-muted-foreground font-mono">
+      LOADING CANVAS ENGINE...
+    </div>
+  )
+})
+
+const Background = dynamic(() => import('@xyflow/react').then(mod => ({ default: mod.Background })), { ssr: false })
+const Controls = dynamic(() => import('@xyflow/react').then(mod => ({ default: mod.Controls })), { ssr: false })
+const MiniMap = dynamic(() => import('@xyflow/react').then(mod => ({ default: mod.MiniMap })), { ssr: false })
+
+// Hooks must be imported separately as they can't be dynamic
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   Connection,
@@ -17,16 +30,25 @@ import {
   Panel,
   ReactFlowInstance,
 } from '@xyflow/react'
+
 import '@xyflow/react/dist/style.css'
 
 import LinkNode from './link-node'
 import ConnectionEdge from './connection-edge'
+import GroupNode from './group-node'
+import CreateGroupDialog from './create-group-dialog'
+import GroupPropertiesDialog from './group-properties-dialog'
+import CanvasToolbar from './canvas-toolbar'
+import AddLinkDialog from './add-link-dialog'
 import { useCanvasStore } from '@/store/canvas-store'
 import { generateId } from '@/lib/utils'
+import type { Group } from '@/types'
+import { exportData, importData } from '@/lib/storage'
 
 
 const nodeTypes = {
   linkCard: LinkNode,
+  group: GroupNode,
 }
 
 const edgeTypes = {
@@ -47,9 +69,61 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   const deleteLink = useCanvasStore(state => state.deleteLink)
   const addConnection = useCanvasStore(state => state.addConnection)
   const deleteConnection = useCanvasStore(state => state.deleteConnection)
+  const addGroup = useCanvasStore(state => state.addGroup)
+  const updateGroup = useCanvasStore(state => state.updateGroup)
+  const deleteGroup = useCanvasStore(state => state.deleteGroup)
   const setViewport = useCanvasStore(state => state.setViewport)
   const loadCanvas = useCanvasStore(state => state.loadCanvas)
 
+  // Group creation state
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null)
+  
+  // Group properties state
+  const [isGroupPropertiesOpen, setIsGroupPropertiesOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<Group | undefined>(undefined)
+  
+  // Add link state
+  const [isAddLinkOpen, setIsAddLinkOpen] = useState(false)
+  const [linkPosition, setLinkPosition] = useState<{ x: number; y: number } | null>(null)
+  
+  // Toolbar handlers
+  const handleExport = useCallback(async () => {
+    try {
+      const data = await exportData()
+      const blob = new Blob([data], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `canvas-backup-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export failed:', error)
+    }
+  }, [])
+
+  const handleImport = useCallback(async () => {
+    try {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.json'
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0]
+        if (file) {
+          const text = await file.text()
+          await importData(text)
+          // Reload canvas to show imported data
+          loadCanvas(canvasId)
+        }
+      }
+      input.click()
+    } catch (error) {
+      console.error('Import failed:', error)
+    }
+  }, [canvasId, loadCanvas])
 
   // Initialize canvas
   useEffect(() => {
@@ -60,7 +134,7 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   useEffect(() => {
     if (canvas) {
       // Map links to nodes
-      const initialNodes: Node[] = canvas.links.map(link => ({
+      const linkNodes: Node[] = canvas.links.map(link => ({
         id: link.id,
         type: 'linkCard',
         position: { x: link.x, y: link.y },
@@ -69,6 +143,25 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
           onDelete: (id: string) => deleteLink(id)
         },
       }))
+
+      // Map groups to nodes (render behind links)
+      const groupNodes: Node[] = (canvas.groups || []).map(group => ({
+        id: group.id,
+        type: 'group',
+        position: { x: group.x, y: group.y },
+        data: {
+          ...group,
+          onDelete: (id: string) => deleteGroup(id),
+          onUpdate: (id: string, updates: any) => updateGroup(id, updates),
+          onEdit: (group: Group) => {
+            setEditingGroup(group)
+            setIsGroupPropertiesOpen(true)
+          }
+        },
+      }))
+
+      // Groups should render behind links, so we put them first
+      const initialNodes: Node[] = [...groupNodes, ...linkNodes]
       setNodes(initialNodes)
 
       // Map connections to edges
@@ -85,17 +178,25 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
       }))
       setEdges(initialEdges)
     }
-  }, [canvas, setNodes, setEdges, deleteLink, deleteConnection])
+  }, [canvas, setNodes, setEdges, deleteLink, deleteConnection, deleteGroup, updateGroup])
 
   // Node drag handler
   const onNodeDragStop = useCallback(
     (event: React.MouseEvent, node: Node) => {
-      updateLink(node.id, {
-        x: node.position.x,
-        y: node.position.y,
-      })
+      // Handle different node types
+      if (node.type === 'linkCard') {
+        updateLink(node.id, {
+          x: node.position.x,
+          y: node.position.y,
+        })
+      } else if (node.type === 'group') {
+        updateGroup(node.id, {
+          x: node.position.x,
+          y: node.position.y,
+        })
+      }
     },
-    [updateLink]
+    [updateLink, updateGroup]
   )
 
   // Connection handler
@@ -191,6 +292,53 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
     [rfInstance]
   )
 
+  // Context menu handler
+  const onContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault()
+      
+      // Only show context menu on canvas background, not on nodes
+      const targetElement = event.target as HTMLElement
+      if (targetElement.closest('.react-flow__node')) {
+        return
+      }
+
+      const position = rfInstance
+        ? rfInstance.screenToFlowPosition({
+            x: event.clientX,
+            y: event.clientY,
+          })
+        : {
+            x: event.clientX,
+            y: event.clientY,
+          }
+
+      setContextMenuPosition(position)
+    },
+    [rfInstance]
+  )
+
+  // Group creation handler
+  const handleCreateGroup = useCallback(
+    (groupData: { id: string; name: string; color: string; x: number; y: number; width: number; height: number }) => {
+      addGroup(groupData)
+    },
+    [addGroup]
+  )
+
+  // Add link handler
+  const handleAddLink = useCallback(
+    (linkData: any) => {
+      useCanvasStore.getState().addLink(linkData)
+    },
+    []
+  )
+
+  // Close context menu when clicking away
+  const onPaneClick = useCallback(() => {
+    setContextMenuPosition(null)
+  }, [])
+
   if (!canvas) {
     return (
       <div className="flex items-center justify-center h-screen w-full bg-background text-muted-foreground font-mono">
@@ -201,7 +349,29 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
 
   return (
     <div className="w-full h-screen bg-background">
-      <ReactFlow
+      <CanvasToolbar
+        onCreateGroup={() => setIsGroupDialogOpen(true)}
+        onAddLink={() => {
+          // Center the position in viewport
+          const centerX = window.innerWidth / 2
+          const centerY = window.innerHeight / 2
+          const position = rfInstance 
+            ? rfInstance.screenToFlowPosition({ x: centerX, y: centerY })
+            : { x: 0, y: 0 }
+          
+          setLinkPosition(position)
+          setIsAddLinkOpen(true)
+        }}
+        onExport={handleExport}
+        onImport={handleImport}
+      />
+      
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-screen w-full bg-background text-muted-foreground font-mono">
+          LOADING CANVAS ENGINE...
+        </div>
+      }>
+        <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -211,6 +381,8 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
         onMoveEnd={onMoveEnd}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onContextMenu={onContextMenu}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultViewport={canvas.viewport}
@@ -249,6 +421,59 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
           nodeColor="var(--ring)"
         />
       </ReactFlow>
+      </Suspense>
+
+      {/* Context Menu */}
+      {contextMenuPosition && (
+        <div
+          className="absolute bg-background border-2 border-border rounded-none shadow-lg py-1 z-50"
+          style={{
+            left: contextMenuPosition.x,
+            top: contextMenuPosition.y,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-1 text-left text-sm font-mono hover:bg-muted text-left"
+            onClick={() => {
+              setIsGroupDialogOpen(true)
+              setContextMenuPosition(null)
+            }}
+          >
+            CREATE GROUP
+          </button>
+        </div>
+      )}
+
+      {/* Group Creation Dialog */}
+      <CreateGroupDialog
+        isOpen={isGroupDialogOpen}
+        onClose={() => setIsGroupDialogOpen(false)}
+        onCreateGroup={handleCreateGroup}
+        initialPosition={contextMenuPosition || undefined}
+      />
+
+      {/* Group Properties Dialog */}
+      <GroupPropertiesDialog
+        isOpen={isGroupPropertiesOpen}
+        onClose={() => {
+          setIsGroupPropertiesOpen(false)
+          setEditingGroup(undefined)
+        }}
+        onUpdateGroup={updateGroup}
+        group={editingGroup}
+      />
+
+      {/* Add Link Dialog */}
+      <AddLinkDialog
+        isOpen={isAddLinkOpen}
+        onClose={() => {
+          setIsAddLinkOpen(false)
+          setLinkPosition(null)
+        }}
+        onAddLink={handleAddLink}
+        initialPosition={linkPosition || undefined}
+      />
     </div>
   )
 }
