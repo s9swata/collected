@@ -86,9 +86,9 @@ Deployment: Vercel (serverless)
 ### 1. Create Next.js Project
 
 ```bash
-npx create-next-app@latest link-canvas
+npx create-next-app@latest collected
 # Select: TypeScript, ESLint, Tailwind CSS, App Router, default alias
-cd link-canvas
+cd collected
 ```
 
 ### 2. Install Dependencies
@@ -110,7 +110,7 @@ npm install -D @types/node
 ### 3. Project Structure
 
 ```
-link-canvas/
+collected/
 ├── app/
 │   ├── api/
 │   │   └── metadata/
