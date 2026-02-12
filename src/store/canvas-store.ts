@@ -80,8 +80,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   addLink: (link: Link) => {
+    console.log('🔗 New link node added:', link)
+    
     const { canvas } = get()
-    if (!canvas) return
+    if (!canvas) {
+      console.log('❌ No canvas found - link not added')
+      return
+    }
 
     const updatedCanvas = {
       ...canvas,

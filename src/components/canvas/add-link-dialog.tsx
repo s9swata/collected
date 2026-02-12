@@ -15,6 +15,7 @@ import {
 import type { Link } from '@/types'
 import { generateId } from '@/lib/utils'
 import { urlSchema } from '@/lib/validations'
+import { useCanvasStore } from '@/store/canvas-store'
 
 interface AddLinkDialogProps {
   isOpen: boolean
@@ -81,8 +82,13 @@ export default function AddLinkDialog({
           favicon: metadata.favicon,
         }
         
-        // Parent should handle this update
-        console.log('Link updated with metadata:', updatedLink)
+        // Update the link with fetched metadata
+        useCanvasStore.getState().updateLink(newLink.id, {
+          title: metadata.title,
+          description: metadata.description,
+          imageUrl: metadata.imageUrl,
+          favicon: metadata.favicon,
+        })
       } catch (metadataError) {
         console.error('Failed to fetch metadata:', metadataError)
         // Keep the original URL as title if metadata fails
