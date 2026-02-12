@@ -118,7 +118,7 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
           <img
             src={data.imageUrl}
             alt={data.title}
-            className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+            className="w-full h-full object-contain grayscale group-hover:grayscale-0 transition-all duration-500"
             onError={(e) => {
               e.currentTarget.style.display = 'none'
             }}
