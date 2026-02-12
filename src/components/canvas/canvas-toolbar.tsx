@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Folder, Download, Upload, Link as LinkIcon } from 'lucide-react'
+import { Plus, Folder, Download, Upload, Link as LinkIcon, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -16,6 +16,7 @@ interface CanvasToolbarProps {
   onAddLink: () => void
   onExport: () => void
   onImport: () => void
+  onMetadataRefresh: () => void
   className?: string
 }
 
@@ -24,6 +25,7 @@ export default function CanvasToolbar({
   onAddLink,
   onExport,
   onImport,
+  onMetadataRefresh,
   className
 }: CanvasToolbarProps) {
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -61,6 +63,18 @@ export default function CanvasToolbar({
         </Button>
 
         <Separator orientation="vertical" className="h-6 mx-1 bg-border" />
+
+        {/* Metadata Refresh Button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onMetadataRefresh}
+          className="h-8 px-2 rounded-none border border-transparent hover:border-border hover:bg-muted flex items-center gap-2"
+          title="Refresh Metadata"
+        >
+          <RefreshCw size={12} />
+          <span className="hidden sm:inline">REFRESH</span>
+        </Button>
 
         {/* Import Button */}
         <Popover open={isImportOpen} onOpenChange={setIsImportOpen}>

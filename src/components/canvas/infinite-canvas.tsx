@@ -40,10 +40,12 @@ import CreateGroupDialog from './create-group-dialog'
 import GroupPropertiesDialog from './group-properties-dialog'
 import CanvasToolbar from './canvas-toolbar'
 import AddLinkDialog from './add-link-dialog'
+import MetadataRefreshDialog from './metadata-refresh-dialog'
 import { useCanvasStore } from '@/store/canvas-store'
 import { generateId } from '@/lib/utils'
 import type { Group } from '@/types'
 import { exportData, importData } from '@/lib/storage'
+import { needsMetadataRefresh, markForMetadataRefresh } from '@/lib/metadata-refresher'
 
 
 const nodeTypes = {
@@ -86,6 +88,9 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   // Add link state
   const [isAddLinkOpen, setIsAddLinkOpen] = useState(false)
   const [linkPosition, setLinkPosition] = useState<{ x: number; y: number } | null>(null)
+  
+  // Metadata refresh state
+  const [isMetadataRefreshOpen, setIsMetadataRefreshOpen] = useState(false)
   
   // Toolbar handlers
   const handleExport = useCallback(async () => {
@@ -133,6 +138,8 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
   // Sync store -> local state
   useEffect(() => {
     if (canvas) {
+      // Check for metadata refresh needs
+      checkForMetadataRefresh()
       // Map links to nodes
       const linkNodes: Node[] = canvas.links.map(link => ({
         id: link.id,
@@ -140,7 +147,8 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
         position: { x: link.x, y: link.y },
         data: {
           ...link,
-          onDelete: (id: string) => deleteLink(id)
+          onDelete: (id: string) => deleteLink(id),
+          onRefreshMetadata: (id: string) => markForMetadataRefresh(id)
         },
       }))
 
@@ -333,10 +341,26 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
     },
     []
   )
+  
+  // Check if links need metadata refresh on canvas load
+  const checkForMetadataRefresh = useCallback(() => {
+    const currentCanvas = useCanvasStore.getState().canvas
+    if (!currentCanvas) return
+    
+    const linksNeedingRefresh = currentCanvas.links.filter(needsMetadataRefresh)
+    if (linksNeedingRefresh.length > 0) {
+      console.log(`Found ${linksNeedingRefresh.length} links needing metadata refresh`)
+    }
+  }, [])
 
   // Close context menu when clicking away
   const onPaneClick = useCallback(() => {
     setContextMenuPosition(null)
+  }, [])
+  
+  // Handle metadata refresh dialog
+  const handleMetadataRefresh = useCallback(() => {
+    setIsMetadataRefreshOpen(true)
   }, [])
 
   if (!canvas) {
@@ -364,6 +388,7 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
         }}
         onExport={handleExport}
         onImport={handleImport}
+        onMetadataRefresh={handleMetadataRefresh}
       />
       
       <Suspense fallback={
@@ -473,6 +498,12 @@ export default function InfiniteCanvas({ canvasId }: InfiniteCanvasProps) {
         }}
         onAddLink={handleAddLink}
         initialPosition={linkPosition || undefined}
+      />
+
+      {/* Metadata Refresh Dialog */}
+      <MetadataRefreshDialog
+        isOpen={isMetadataRefreshOpen}
+        onClose={() => setIsMetadataRefreshOpen(false)}
       />
     </div>
   )

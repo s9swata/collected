@@ -27,6 +27,8 @@ export interface Link {
   width: number
   height: number
   zIndex: number
+  metadataFetchedAt?: string | null
+  needsMetadataRefresh?: boolean
 }
 
 export interface Connection {

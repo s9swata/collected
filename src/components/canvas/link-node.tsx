@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import { ExternalLink, Trash2, GripHorizontal } from 'lucide-react'
+import { ExternalLink, Trash2, GripHorizontal, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 
 interface LinkNodeData extends Link, Record<string, unknown> {
   onDelete?: (id: string) => void
+  onRefreshMetadata?: (id: string) => void
 }
 
 type LinkNode = Node<LinkNodeData>
@@ -20,6 +21,13 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
     e.stopPropagation()
     if (data.onDelete) {
       data.onDelete(data.id)
+    }
+  }
+
+  const handleRefresh = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (data.onRefreshMetadata) {
+      data.onRefreshMetadata(data.id)
     }
   }
 
@@ -81,15 +89,24 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
             <img
               src={data.favicon}
               alt=""
-              className="w-4 h-4"
+              className={cn(
+                "w-4 h-4",
+                data.needsMetadataRefresh && "animate-pulse opacity-60"
+              )}
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
               }}
             />
           )}
-          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground truncate max-w-[150px]">
+          <span className={cn(
+            "text-[10px] font-mono uppercase tracking-wider truncate max-w-[150px]",
+            data.needsMetadataRefresh ? "text-amber-600" : "text-muted-foreground"
+          )}>
             {data.domain}
           </span>
+          {data.needsMetadataRefresh && (
+            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Metadata needs refresh" />
+          )}
         </div>
         <GripHorizontal className="w-4 h-4 text-muted-foreground/50" />
       </div>
@@ -123,32 +140,49 @@ function LinkNode({ data, selected }: NodeProps<LinkNode>) {
 
       <Separator />
 
-      {/* Footer / Actions */}
-      <CardFooter className="p-2 bg-muted/10 flex items-center justify-between">
-         <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-none text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={handleDelete}
-          >
-            <Trash2 size={12} />
-          </Button>
+{/* Footer / Actions */}
+      <CardFooter className="p-2 bg-muted/10 flex items-center justify-between gap-1">
+         {/* Left actions */}
+         <div className="flex items-center gap-1">
+           {/* Show refresh button if metadata is stale */}
+           {data.needsMetadataRefresh && (
+             <Button
+               variant="ghost"
+               size="icon"
+               className="h-6 w-6 rounded-none text-amber-600 hover:text-amber-700 hover:bg-amber-50 animate-pulse"
+               onClick={handleRefresh}
+               title="Refresh metadata"
+             >
+               <RefreshCw size={12} />
+             </Button>
+           )}
+           
+           <Button
+               variant="ghost"
+               size="icon"
+               className="h-6 w-6 rounded-none text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+               onClick={handleDelete}
+             >
+               <Trash2 size={12} />
+             </Button>
+         </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 rounded-none text-[10px] font-mono hover:text-primary hover:bg-primary/5 gap-1.5 px-2"
-            asChild
-          >
-            <a
-              href={data.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-            >
-              OPEN <ExternalLink size={10} />
-            </a>
-          </Button>
+         {/* Right action - Open link */}
+           <Button
+             variant="ghost"
+             size="sm"
+             className="h-6 rounded-none text-[10px] font-mono hover:text-primary hover:bg-primary/5 gap-1.5 px-2 flex-shrink-0"
+             asChild
+           >
+             <a
+               href={data.url}
+               target="_blank"
+               rel="noopener noreferrer"
+               onClick={(e) => e.stopPropagation()}
+             >
+               OPEN <ExternalLink size={10} />
+             </a>
+           </Button>
       </CardFooter>
     </Card>
   )
