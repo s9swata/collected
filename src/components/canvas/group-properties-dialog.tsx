@@ -27,20 +27,11 @@ export default function GroupPropertiesDialog({
   onUpdateGroup, 
   group 
 }: GroupPropertiesDialogProps) {
-  const [name, setName] = useState('')
-  const [color, setColor] = useState('#FF4F00')
-  const [width, setWidth] = useState(400)
-  const [height, setHeight] = useState(300)
-
-  // Reset form when group changes
-  useEffect(() => {
-    if (group) {
-      setName(group.name)
-      setColor(group.color || '#FF4F00')
-      setWidth(group.width)
-      setHeight(group.height)
-    }
-  }, [group])
+  // Initialize state from group prop directly
+  const [name, setName] = useState(group?.name ?? '')
+  const [color, setColor] = useState(group?.color ?? '#FF4F00')
+  const [width, setWidth] = useState(group?.width ?? 400)
+  const [height, setHeight] = useState(group?.height ?? 300)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

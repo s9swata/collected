@@ -1,4 +1,4 @@
-import type { Link } from '@/types'
+import type { Link, LinkMetadata } from '@/types'
 import { useCanvasStore } from '@/store/canvas-store'
 
 // Configuration for batch processing
@@ -39,7 +39,7 @@ export function needsMetadataRefresh(link: Link): boolean {
 /**
  * Fetch metadata for a single link with retry logic
  */
-async function fetchLinkMetadata(link: Link, retryCount = 0): Promise<{ success: boolean; metadata?: any; error?: string }> {
+async function fetchLinkMetadata(link: Link, retryCount = 0): Promise<{ success: boolean; metadata?: LinkMetadata; error?: string }> {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
@@ -73,7 +73,7 @@ async function fetchLinkMetadata(link: Link, retryCount = 0): Promise<{ success:
 /**
  * Update a link with new metadata
  */
-async function updateLinkWithMetadata(link: Link, metadata: any): Promise<void> {
+async function updateLinkWithMetadata(link: Link, metadata: LinkMetadata): Promise<void> {
   const updates = {
     title: metadata.title || link.title,
     description: metadata.description,

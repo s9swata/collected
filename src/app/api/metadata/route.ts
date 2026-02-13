@@ -61,29 +61,26 @@ async function fetchYouTubeMetadata(url: string): Promise<LinkMetadata> {
 }
 
 /**
- * Fetch Reddit metadata with enhanced content extraction
+ * Fetch Reddit metadata using Pushshift API (works on Vercel)
  */
 async function fetchRedditMetadata(url: string): Promise<LinkMetadata> {
   try {
-    // Extract subreddit and post info from URL
     const redditMatch = url.match(/reddit\.com\/r\/([^\/]+)\/comments\/([a-z0-9]+)(?:\/[^\/]+)?\/?([a-z0-9]+)?/)
     const subreddit = redditMatch?.[1] || 'unknown'
     const postId = redditMatch?.[2]
-    const isComment = !!redditMatch?.[3]
 
-    // Fetch the page with Reddit-friendly headers
+    if (!postId) {
+      throw new Error('Invalid Reddit post URL')
+    }
+
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15s timeout for Reddit
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-    const response = await fetch(url, {
+    const pushshiftUrl = `https://api.pushshift.io/reddit/search/submission/?ids=${postId}&metadata=true`
+    const response = await fetch(pushshiftUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'LinkCanvas/1.0 (https://linkcanvas.app)',
+        'Accept': 'application/json',
       },
       signal: controller.signal,
     })
@@ -91,96 +88,44 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata> {
     clearTimeout(timeoutId)
 
     if (!response.ok) {
-      throw new Error(`Reddit HTTP error! status: ${response.status}`)
+      throw new Error(`Pushshift API error: ${response.status}`)
     }
 
-    const html = await response.text()
-    const $ = cheerio.load(html)
+    const data = await response.json()
+    const post = data.data?.[0]
 
-
-
-    // Extract title with multiple Reddit-specific fallbacks
-    const h1Text = $('h1').first().text().trim()
-    const title =
-      $('meta[property="og:title"]').attr('content') ||
-      $('meta[name="twitter:title"]').attr('content') ||
-      (h1Text && h1Text !== '' && !h1Text.toLowerCase().includes('reddit') ? h1Text : null) ||
-      $('title').text().replace(/ : reddit\.com$/, '').replace('Reddit - The heart of the internet', '') ||
-      $('[data-testid="post-content"] h3').text() ||
-      `[r/${subreddit}] Post`
-
-    // Extract Reddit post content for description
-    let description = ''
-    
-    // Try multiple selectors for post content
-    const postContent = 
-      $('[data-testid="post-content"]').first().text() ||
-      $('.usertext-body').first().text() ||
-      $('.expando').first().text() ||
-      $('div[data-click-id="text"] p').first().text() ||
-      $('div p').first().text() // This seems to work for current Reddit structure
-    
-    if (postContent) {
-      // Create short summary (max 200 chars)
-      description = postContent.length > 200 
-        ? postContent.substring(0, 200) + '...' 
-        : postContent
-    } else {
-      // Fallback to meta description
-      description = 
-        $('meta[property="og:description"]').attr('content') ||
-        $('meta[name="twitter:description"]').attr('content') ||
-        `Post from r/${subreddit}`
+    if (!post) {
+      throw new Error('Post not found in Pushshift')
     }
 
-    // Add subreddit context
-    if (description && !description.includes(`r/${subreddit}`)) {
-      description = `${description} • r/${subreddit}`
+    let imageUrl: string | undefined
+
+    if (post.preview?.images?.[0]?.source?.url) {
+      imageUrl = post.preview.images[0].source.url
+    } else if (post.thumbnail && post.thumbnail.startsWith('http')) {
+      imageUrl = post.thumbnail
+    } else if (post.url && post.url.includes('redd.it')) {
+      imageUrl = post.url
     }
 
-    // Extract main thumbnail/image
-    let imageUrl = 
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content')
-
-    // Reddit-specific image processing
-    if (imageUrl) {
-      // Handle Reddit's CDN URLs
-      if (imageUrl.includes('preview.redd.it') || imageUrl.includes('i.redd.it')) {
-        // Ensure absolute URL and remove size parameters for better quality
-        if (imageUrl.startsWith('//')) {
-          imageUrl = 'https:' + imageUrl
-        }
-        // Remove width/height parameters to get higher quality
-        imageUrl = imageUrl.replace(/(?:\?|&)(?:width|height|format|auto)=webp[^&]*/g, '')
-      }
-      
-      // Make sure image URL is absolute
-      if (!imageUrl.startsWith('http')) {
-        try {
-          imageUrl = new URL(imageUrl, url).href
-        } catch {
-          imageUrl = undefined
-        }
-      }
-    }
-
-    // Favicon
-    const favicon = 'https://www.reddit.com/favicon.ico'
+    const title = post.title || `[r/${subreddit}] Post`
+    const selftext = post.selftext || ''
+    const description = selftext 
+      ? (selftext.length > 200 ? selftext.substring(0, 200) + '...' : selftext)
+      : `Post from r/${subreddit}`
 
     return {
       url,
-      title: title.trim(),
-      description: description.trim() || `A post from r/${subreddit}`,
-      imageUrl: imageUrl || undefined,
-      favicon,
+      title,
+      description: description.trim(),
+      imageUrl,
+      favicon: 'https://www.reddit.com/favicon.ico',
       domain: 'reddit.com',
     }
 
   } catch (error) {
     console.error('Reddit metadata fetch error:', error)
     
-    // Simple fallback - basic info
     try {
       const urlObj = new URL(url)
       const pathMatch = urlObj.pathname.match(/\/r\/([^\/]+)/)
